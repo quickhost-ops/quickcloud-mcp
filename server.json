@@ -1,0 +1,45 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "uk.quickcloud/qc-mcp",
+  "description": "Manage your QuickHost QuickCloud account - VMs, dedicated servers, Cloud Firewalls, load balancers, storage boxes, managed databases, SMTP relay, websites and DNS - with your own API key. Read-only unless started with --allow-write; every change needs your confirmation.",
+  "repository": {
+    "url": "https://github.com/quickhost-ops/quickcloud-mcp",
+    "source": "github"
+  },
+  "version": "1.0.1",
+  "websiteUrl": "https://quickcloud.uk",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@quickhost/qc-mcp",
+      "version": "1.0.1",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "QC_API_TOKEN",
+          "description": "Your QuickCloud API key (create one in the panel under API). A read-only or product-limited key is the safest to give an assistant.",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "QC_API_URL",
+          "description": "Panel origin. Only needed if your provider runs QuickCloud on their own domain (default https://cloud.quickhost.uk).",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "QC_MCP_WRITE",
+          "description": "Set to 1 to allow the assistant to create and change things (equivalent to the --allow-write flag). Every write still asks for your confirmation.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

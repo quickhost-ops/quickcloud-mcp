@@ -1,0 +1,40 @@
+{
+  "name": "@quickhost/qc-mcp",
+  "version": "1.0.1",
+  "mcpName": "uk.quickcloud/qc-mcp",
+  "description": "MCP (Model Context Protocol) server for the QuickHost QuickCloud API - lets Claude Desktop, Claude Code, Cursor and other AI assistants manage your cloud with your own API key. Read-only by default.",
+  "type": "module",
+  "bin": {
+    "qc-mcp": "qc-mcp.mjs"
+  },
+  "files": [
+    "qc-mcp.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "author": "QuickHost (https://quickhost.uk)",
+  "homepage": "https://quickcloud.uk",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/quickhost-ops/quickcloud-mcp"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "quickcloud",
+    "quickhost",
+    "cloud",
+    "hosting",
+    "vps",
+    "dns",
+    "claude"
+  ],
+  "scripts": {
+    "test": "node qc-mcp.mjs --version"
+  }
+}
