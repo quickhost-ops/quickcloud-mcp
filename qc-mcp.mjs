@@ -39,7 +39,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-const VERSION = '1.0.1';   // 1.0.1: MCP Registry listing (mcpName); 1.0.0: first release - tools generated from the v1 catalogue, read-only default, confirm on writes
+const VERSION = '1.1.0';   // 1.1.0: core exported for the panel's hosted /mcp endpoint (docs/remote-mcp-plan.md) - same tools, same rules; 1.0.1: MCP Registry listing (mcpName); 1.0.0: first release - tools generated from the v1 catalogue, read-only default, confirm on writes
 const DEFAULT_URL = 'https://cloud.quickhost.uk';   // (the panel pre-fills this on download)
 const CFG_DIR = path.join(os.homedir(), '.config', 'quickcloud');
 const CFG_FILE = path.join(CFG_DIR, 'config.json');         // shared with the qc CLI
@@ -71,12 +71,14 @@ const log = (msg) => process.stderr.write(`[qc-mcp] ${msg}\n`);   // stderr only
 // ----------------------------------------------------------------------------
 class ApiError extends Error { constructor(status, body) { super(body?.error?.message || `HTTP ${status}`); this.status = status; this.body = body; } }
 
-async function api(method, p, { body, query, idem } = {}) {
-  const { url, token } = cfg();
+// `client` = { url, token, headers? }. The stdio server uses cfg(); the panel's
+// hosted endpoint passes the caller's own bearer per request (plan rule 2).
+export async function api(method, p, { body, query, idem } = {}, client = cfg()) {
+  const { url, token } = client;
   if (!token) throw new ApiError(401, { error: { code: 'no_api_key', message: 'No API key configured. Set QC_API_TOKEN in the MCP server env (create a key in the panel under API), or run `qc config set token <key>`.' } });
   const u = new URL(url + p);
   if (query && typeof query === 'object') for (const [k, v] of Object.entries(query)) if (v != null && v !== '') u.searchParams.set(k, String(v));
-  const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json', 'User-Agent': `qc-mcp/${VERSION}` };
+  const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json', 'User-Agent': `qc-mcp/${VERSION}`, ...(client.headers || {}) };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (idem) headers['Idempotency-Key'] = idem;
   for (let attempt = 0; ; attempt++) {
@@ -202,12 +204,13 @@ export function buildTools(catalogue, { allowWrite = false, products = [] } = {}
 const text = (obj) => ({ content: [{ type: 'text', text: typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2) }] });
 const errText = (obj) => ({ ...text(obj), isError: true });
 
-async function callTool(state, name, args) {
+// state = { catalogue, tools, index, allowWrite, panel, waitCapS?, modeText? } - see mcpState().
+export async function callTool(state, name, args, client = cfg()) {
   args = args && typeof args === 'object' ? args : {};
   if (name === 'quickcloud_help') {
     const c = state.catalogue;
     return text({
-      server: `qc-mcp ${VERSION}`, panel: cfg().url, mode: ALLOW_WRITE ? 'writes allowed (every write still needs confirm:true)' : 'READ-ONLY (start the server with --allow-write to enable changes)',
+      server: `qc-mcp ${VERSION}`, panel: state.panel, mode: state.modeText || (state.allowWrite ? 'writes allowed (every write still needs confirm:true)' : 'READ-ONLY (start the server with --allow-write to enable changes)'),
       products_offered: [...new Set([...state.index.values()].map((v) => v.group))], tools: state.tools.length,
       auth: c.auth, rate_limit: c.rate_limit, idempotency: c.idempotency, async: c.async, errors: c.errors,
       rules: ['Describe any change and its price to the person before setting confirm:true.', 'Never guess an id - list first.', 'After an async call, use wait_for_job then read the resource back.'],
@@ -216,10 +219,11 @@ async function callTool(state, name, args) {
   if (name === 'wait_for_job') {
     const id = String(args.id || '').trim();
     if (!/^\d+$/.test(id)) return errText({ error: { code: 'invalid_request', message: 'id must be a numeric job id' } });
-    const timeout = Math.min(600, Math.max(5, Number(args.timeout_s) || 300)) * 1000;
+    const cap = state.waitCapS || 600;
+    const timeout = Math.min(cap, Math.max(5, Number(args.timeout_s) || Math.min(300, cap))) * 1000;
     const started = Date.now();
     for (;;) {
-      let r; try { r = await api('GET', `/api/v1/jobs/${id}`); } catch (e) { return errText(e.body || { error: { message: e.message } }); }
+      let r; try { r = await api('GET', `/api/v1/jobs/${id}`, {}, client); } catch (e) { return errText(e.body || { error: { message: e.message } }); }
       const st = r?.job?.status;
       if (st === 'done' || st === 'failed') return st === 'failed' ? errText(r) : text(r);
       if (Date.now() - started > timeout) return errText({ error: { code: 'timeout', message: `job ${id} still ${st || 'pending'} after ${timeout / 1000}s - poll again with wait_for_job` }, job: r?.job });
@@ -242,12 +246,21 @@ async function callTool(state, name, args) {
   const hasBody = t.e.method !== 'GET' && Object.keys(body).length > 0;
   const idem = (t.e.method === 'POST' || t.e.method === 'DELETE') ? randomUUID() : undefined;
   try {
-    const r = await api(t.e.method, p, { body: hasBody ? body : (t.e.method === 'GET' ? undefined : {}), query: t.e.method === 'GET' ? args.query : undefined, idem });
+    const r = await api(t.e.method, p, { body: hasBody ? body : (t.e.method === 'GET' ? undefined : {}), query: t.e.method === 'GET' ? args.query : undefined, idem }, client);
     return text(r);
   } catch (e) {
     return errText(e.body && typeof e.body === 'object' ? { status: e.status, ...e.body } : { error: { code: 'request_failed', message: e.message } });
   }
 }
+
+// Build the per-mode state both entries use. `catalogue` = the GET /api/v1 body.
+export function mcpState(catalogue, { allowWrite = false, products = [], panel = '', waitCapS = 600, modeText = null } = {}) {
+  return { catalogue, ...buildTools(catalogue, { allowWrite, products }), allowWrite, panel, waitCapS, modeText };
+}
+export function initializeResult(state) {
+  return { protocolVersion: PROTOCOL, capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'quickcloud', version: VERSION }, instructions: `QuickCloud (${state.panel}) via its v1 API. ${state.allowWrite ? 'Writes are enabled but EVERY write tool needs confirm:true - describe the change and any price to the person and get their agreement first.' : 'This connection is READ-ONLY.'} Call quickcloud_help first. Never guess ids - list, then act. Async calls return a job: use wait_for_job, then read the resource back.` };
+}
+export { text as mcpText, errText as mcpErrText, VERSION as MCP_VERSION };
 
 // ----------------------------------------------------------------------------
 // MCP over stdio (JSON-RPC 2.0, newline-delimited)
@@ -265,10 +278,9 @@ async function loadCatalogue() {
 }
 
 async function serve() {
-  const state = { catalogue: null, tools: [], index: new Map() };
+  let state = { catalogue: null, tools: [], index: new Map(), allowWrite: ALLOW_WRITE, panel: cfg().url };
   try {
-    state.catalogue = await loadCatalogue();
-    Object.assign(state, buildTools(state.catalogue, { allowWrite: ALLOW_WRITE, products: PRODUCTS }));
+    state = mcpState(await loadCatalogue(), { allowWrite: ALLOW_WRITE, products: PRODUCTS, panel: cfg().url });
     log(`${state.tools.length} tools from ${cfg().url} (${ALLOW_WRITE ? 'writes allowed, confirm required' : 'read-only'})`);
   } catch (e) {
     log(`could not load the API catalogue: ${e.message} - check QC_API_URL`);
@@ -296,10 +308,10 @@ async function serve() {
     }
     switch (method) {
       case 'initialize':
-        return send({ jsonrpc: '2.0', id, result: { protocolVersion: PROTOCOL, capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'quickcloud', version: VERSION }, instructions: `QuickCloud (${cfg().url}) via its v1 API. ${ALLOW_WRITE ? 'Writes are enabled but EVERY write tool needs confirm:true - describe the change and any price to the person and get their agreement first.' : 'This connection is READ-ONLY.'} Call quickcloud_help first. Never guess ids - list, then act. Async calls return a job: use wait_for_job, then read the resource back.` } });
+        return send({ jsonrpc: '2.0', id, result: initializeResult(state) });
       case 'ping': return send({ jsonrpc: '2.0', id, result: {} });
       case 'tools/list':
-        if (!state.catalogue) { try { state.catalogue = await loadCatalogue(); Object.assign(state, buildTools(state.catalogue, { allowWrite: ALLOW_WRITE, products: PRODUCTS })); } catch (e) { return rpcError(id, -32000, `catalogue unavailable: ${e.message}`); } }
+        if (!state.catalogue) { try { state = mcpState(await loadCatalogue(), { allowWrite: ALLOW_WRITE, products: PRODUCTS, panel: cfg().url }); } catch (e) { return rpcError(id, -32000, `catalogue unavailable: ${e.message}`); } }
         return send({ jsonrpc: '2.0', id, result: { tools: state.tools } });
       case 'tools/call': {
         if (!state.catalogue) return send({ jsonrpc: '2.0', id, result: errText({ error: { code: 'unavailable', message: 'the API catalogue could not be loaded - check QC_API_URL' } }) });

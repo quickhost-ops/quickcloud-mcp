@@ -64,6 +64,16 @@ the Claude Code command). To offer only some products, add `--products=vms,dns` 
 Already use the `qc` CLI? The MCP reads the same `~/.config/quickcloud/config.json`, so with
 `qc config set token …` done you can leave `env` out.
 
+## Connect by URL instead
+
+The same connector also runs hosted on the panel, for apps that connect to an MCP server by
+address: `https://cloud.quickhost.uk/mcp` (view-only) and `https://cloud.quickhost.uk/mcp/manage`
+(changes allowed, each still confirmed), with `Authorization: Bearer <your key>` as a header.
+Every call becomes a request to the same API with your key, so nothing changes about what the
+key may do. Claude.ai custom connectors (No sign-in + Request headers), Claude Code
+`--transport http`, Cursor and VS Code take it; Codex and ChatGPT need an OAuth sign-in, which
+is not offered yet.
+
 ## Using it
 
 Ask the assistant to call `quickcloud_help` first — it reports whether writes are enabled, which

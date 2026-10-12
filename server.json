@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "uk.quickcloud/qc-mcp",
-  "description": "Manage your QuickHost QuickCloud account - VMs, dedicated servers, Cloud Firewalls, load balancers, storage boxes, managed databases, SMTP relay, websites and DNS - with your own API key. Read-only unless started with --allow-write; every change needs your confirmation.",
+  "description": "QuickCloud hosting from your AI assistant: VMs, servers, DNS, firewalls and more. Read-only default.",
   "repository": {
     "url": "https://github.com/quickhost-ops/quickcloud-mcp",
     "source": "github"
   },
-  "version": "1.0.1",
+  "version": "1.1.0",
   "websiteUrl": "https://quickcloud.uk",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@quickhost/qc-mcp",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
