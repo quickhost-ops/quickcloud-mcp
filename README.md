@@ -67,12 +67,11 @@ Already use the `qc` CLI? The MCP reads the same `~/.config/quickcloud/config.js
 ## Connect by URL instead
 
 The same connector also runs hosted on the panel, for apps that connect to an MCP server by
-address: `https://cloud.quickhost.uk/mcp` (view-only) and `https://cloud.quickhost.uk/mcp/manage`
-(changes allowed, each still confirmed), with `Authorization: Bearer <your key>` as a header.
-Every call becomes a request to the same API with your key, so nothing changes about what the
-key may do. Claude.ai custom connectors (No sign-in + Request headers), Claude Code
-`--transport http`, Cursor and VS Code take it; Codex and ChatGPT need an OAuth sign-in, which
-is not offered yet.
+address - Claude on the web/mobile, ChatGPT, Cursor, Codex: `https://cloud.quickhost.uk/mcp`.
+The app sends you to the QuickCloud sign-in (standard OAuth 2.1 with PKCE), where you pick the
+workspace, View only or Manage, and an optional product limit; the token it gets is an API key in
+all but name, so every limit the API enforces applies. Disconnect any time from Account → API.
+An API key works too: `Authorization: Bearer <key>` to `/mcp` (view) or `/mcp/manage` (changes).
 
 ## Using it
 
